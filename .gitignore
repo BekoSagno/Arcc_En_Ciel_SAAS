@@ -24,3 +24,7 @@ backend/uploads/
 Thumbs.db
 .vscode/
 
+# Local tooling (ne pas versionner)
+/bin/
+/gh_*_windows_amd64.zip
+
