@@ -1,0 +1,288 @@
+@import "tailwindcss";
+
+* {
+  font-family: var(--font-jakarta), var(--font-archivo), system-ui, sans-serif;
+}
+
+:root {
+  --background: #020617;
+  --foreground: #e2e8f0;
+  
+  /* Fundly Branding - Palette de couleurs personnalisée */
+  --navy-dark: #020617;
+  --navy-card: #0b101d;
+  --arcc-orange: #f97316;
+  --arcc-cyan: #22d3ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-jakarta);
+  --font-archivo: var(--font-archivo);
+  
+  /* Couleurs personnalisées Fundly Branding */
+  --color-navy-dark: var(--navy-dark);
+  --color-navy-card: var(--navy-card);
+  --color-arcc-orange: var(--arcc-orange);
+  --color-arcc-cyan: var(--arcc-cyan);
+  
+  /* Arrondis massifs */
+  --radius-4xl: 2rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* Empêche tout débordement horizontal (mesh gradients, animations, etc.) */
+  overflow-x: hidden;
+}
+
+/* --- Glow UX helpers (lumière douce au hover/clic) --- */
+.interactive-glow {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-image: linear-gradient(145deg, rgba(99, 102, 241, 0.08), rgba(34, 211, 238, 0.06));
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 220ms ease;
+}
+
+.interactive-glow::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.18), rgba(34, 211, 238, 0.12), transparent 55%);
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 220ms ease, transform 220ms ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.interactive-glow:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 15px 45px rgba(59, 130, 246, 0.18), 0 0 30px rgba(34, 211, 238, 0.14);
+}
+
+.interactive-glow:hover::after {
+  opacity: 0.9;
+  transform: scale(1);
+}
+
+.interactive-glow:active {
+  transform: translateY(0);
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.18);
+}
+
+.interactive-glow:active::after {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.interactive-raise {
+  transition: transform 160ms ease, box-shadow 200ms ease, border-color 160ms ease, background 200ms ease;
+}
+
+.interactive-raise:hover {
+  transform: translateY(-3px) scale(1.03);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 18px 55px rgba(99, 102, 241, 0.25), 0 10px 30px rgba(34, 211, 238, 0.18);
+  background-image: linear-gradient(160deg, rgba(99, 102, 241, 0.18), rgba(34, 211, 238, 0.12));
+}
+
+.interactive-raise:active {
+  transform: translateY(-1px) scale(1.01);
+}
+
+.pill-badge {
+  border-radius: 9999px;
+  padding: 6px 10px;
+  background: linear-gradient(120deg, rgba(99, 102, 241, 0.15), rgba(34, 211, 238, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #e2e8f0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom-2 {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slide-in-from-bottom-2;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+/* --- Animation de texte globale (gradient + hover dynamique) --- */
+@keyframes aurora-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Appliquée à la fois aux titres et à toute classe .text-aurora */
+h1,
+h2,
+h3,
+.text-aurora {
+  background-image: linear-gradient(
+    120deg,
+    #a5b4fc,
+    #f472b6,
+    #c4b5fd
+  );
+  background-size: 260% 260%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  transition:
+    transform 220ms ease,
+    text-shadow 220ms ease,
+    letter-spacing 220ms ease,
+    background-position 900ms ease;
+  animation: aurora-shift 9s ease-in-out infinite alternate;
+  cursor: default;
+}
+
+h1:hover,
+h2:hover,
+h3:hover,
+.text-aurora:hover,
+h1:active,
+h2:active,
+h3:active,
+.text-aurora:active,
+h1:focus-visible,
+h2:focus-visible,
+h3:focus-visible,
+.text-aurora:focus-visible {
+  /* Animation uniquement par le mouvement et le dégradé, SANS flou */
+  transform: translateY(-1px) scale(1.04);
+  letter-spacing: 0.03em;
+  background-position: 100% 50%;
+  text-shadow: none;
+}
+
+/* --- Fundly Branding - Glass Card Effect --- */
+/* 
+ * Utilisation : Ajoutez la classe "glass-card" à n'importe quel élément
+ * pour obtenir un effet de verre dépoli avec bordure semi-transparente.
+ * 
+ * Exemple : <div className="glass-card rounded-4xl p-6">...</div>
+ */
+.glass-card {
+  background: radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.12), transparent 55%),
+              radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.12), transparent 55%),
+              rgba(11, 16, 29, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: 
+    background 260ms ease,
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    transform 220ms ease;
+}
+
+.glass-card:hover {
+  background: radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.22), transparent 55%),
+              radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.22), transparent 55%),
+              rgba(11, 16, 29, 0.9);
+  border-color: rgba(148, 163, 184, 0.7);
+  box-shadow: 
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: translateY(-2px);
+}
+
+.glass-card:active {
+  transform: translateY(0);
+  background: radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.28), transparent 55%),
+              radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.28), transparent 55%),
+              rgba(15, 23, 42, 1);
+  border-color: rgba(249, 115, 22, 0.7);
+  box-shadow:
+    0 8px 32px rgba(15, 23, 42, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* 
+ * Utilitaire rounded-4xl pour arrondis massifs (2rem = 32px)
+ * Utilisation : className="rounded-4xl"
+ */
+.rounded-4xl {
+  border-radius: 2rem;
+}
+
+/* 
+ * Classes utilitaires pour les couleurs Fundly Branding
+ * Utilisation : 
+ * - bg-navy-dark, bg-navy-card
+ * - text-arcc-orange, text-arcc-cyan
+ * - border-arcc-orange, border-arcc-cyan
+ */
+.bg-navy-dark {
+  background-color: var(--navy-dark);
+}
+
+.bg-navy-card {
+  background-color: var(--navy-card);
+}
+
+.text-arcc-orange {
+  color: var(--arcc-orange);
+}
+
+.text-arcc-cyan {
+  color: var(--arcc-cyan);
+}
+
+.bg-arcc-orange {
+  background-color: var(--arcc-orange);
+}
+
+.bg-arcc-cyan {
+  background-color: var(--arcc-cyan);
+}
+
+.border-arcc-orange {
+  border-color: var(--arcc-orange);
+}
+
+.border-arcc-cyan {
+  border-color: var(--arcc-cyan);
+}
