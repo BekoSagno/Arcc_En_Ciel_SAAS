@@ -1,0 +1,474 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPERADMIN
+  TENANT_ADMIN
+}
+
+enum Channel {
+  WHATSAPP
+  MESSENGER
+  FACEBOOK_COMMENT
+}
+
+enum ConversationStatus {
+  OPEN
+  MANUAL_MODE
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum RAGSourceType {
+  PDF
+  TEXT
+  URL
+}
+
+/// Plateformes sociales supportées pour les comptes connectés
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  TIKTOK
+  TWITTER
+  THREADS
+}
+
+model Tenant {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  companyName String? // Nom de l'entreprise (renseigné dans le dashboard)
+  industry    String? // Secteur d'activité (renseigné dans le dashboard)
+  status      String   @default("active")
+  timezone    String   @default("Africa/Conakry")
+  planType    String   @default("basic") // basic, pro, enterprise
+  /// Limite mensuelle de messages IA (0 = illimité). Utilisé pour les quotas IA.
+  aiMonthlyQuotaMessages Int      @default(0)
+  /// Début de période pour le suivi du quota IA (reset automatique mensuel)
+  aiQuotaPeriodStart     DateTime @default(now())
+  /// Indique si le compte Meta du tenant doit être reconnecté (token expiré / révoqué)
+  metaNeedsReconnect     Boolean  @default(false)
+  /// Flag global pour activer/désactiver l'IA pour tout le tenant.
+  /// Quand false, aucune conversation de ce tenant ne déclenche d'appel à l'IA.
+  isAiEnabled Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users                User[]
+  conversations        Conversation[]
+  messages             Message[]
+  ragSources           RAGSource[]
+  ragChunks            RAGChunk[]
+  channelIdentities    ChannelIdentity[]
+  channelConfigs       ChannelConfig[]
+  otpCodes             OTPCode[]
+  invoices             Invoice[]
+  apiUsage             APIUsage[]
+  testNumberMappings   TestNumberMapping[]
+  notifications        Notification[]
+  subscriptions        Subscription[]
+  quotaUsages          QuotaUsage[]
+  conversationSessions ConversationSession[]
+  socialPosts          SocialPost[]
+  socialAccounts       SocialAccount[]
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  email        String   @unique
+  name         String?
+  role         UserRole @default(TENANT_ADMIN)
+  passwordHash String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model Conversation {
+  id               String             @id @default(uuid()) @db.Uuid
+  tenantId         String             @db.Uuid
+  channel          Channel
+  externalThreadId String?
+  customerHandle   String?
+  status           ConversationStatus @default(OPEN)
+  /// Indique si l'IA est activée pour cette conversation.
+  /// Lorsque false, aucun appel à Gemini / au moteur d'IA n'est réalisé pour ce thread.
+  isAiEnabled      Boolean            @default(true)
+  lastMessageAt    DateTime?
+  lastInboundAt    DateTime?
+  lastOutboundAt   DateTime?
+  nextReminderAt   DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  tenant   Tenant                @relation(fields: [tenantId], references: [id])
+  messages Message[]
+  sessions ConversationSession[]
+
+  @@unique([tenantId, externalThreadId])
+  @@index([tenantId, channel])
+  @@index([externalThreadId])
+}
+
+model Message {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  conversationId    String           @db.Uuid
+  direction         MessageDirection
+  externalMessageId String?
+  fromHandle        String?
+  toHandle          String?
+  body              String
+  rawPayload        Json?
+  costUsd           Float?           @default(0)
+  tokenUsage        Int?             @default(0)
+  createdAt         DateTime         @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([tenantId, externalMessageId])
+  @@index([tenantId, createdAt])
+}
+
+model RAGSource {
+  id        String        @id @default(uuid()) @db.Uuid
+  tenantId  String        @db.Uuid
+  type      RAGSourceType
+  title     String
+  sourceUrl String?
+  status    String        @default("active")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id])
+  chunks RAGChunk[]
+
+  @@index([tenantId, type])
+}
+
+model RAGChunk {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  sourceId          String   @db.Uuid
+  pineconeNamespace String
+  pineconeVectorId  String
+  content           String
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id])
+  source RAGSource @relation(fields: [sourceId], references: [id])
+
+  @@index([tenantId, sourceId])
+  @@index([pineconeNamespace])
+}
+
+model ChannelIdentity {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  channel    Channel
+  externalId String
+  label      String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([channel, externalId])
+  @@index([tenantId])
+}
+
+model ChannelConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  channel     Channel
+  status      String   @default("inactive")
+  credentials Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, channel])
+  @@index([tenantId])
+}
+
+model OTPCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  code      String
+  tenantId  String?  @db.Uuid
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([email, used])
+  @@index([tenantId])
+}
+
+model Invoice {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  invoiceNumber String    @unique
+  periodStart   DateTime
+  periodEnd     DateTime
+  subtotalUsd   Float     @default(0)
+  taxUsd        Float     @default(0)
+  totalUsd      Float     @default(0)
+  status        String    @default("pending") // pending, paid, overdue, cancelled
+  dueDate       DateTime
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  lineItems InvoiceLineItem[]
+
+  @@index([tenantId, periodStart])
+  @@index([status])
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  invoiceId   String   @db.Uuid
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  category    String // twilio, openai, hosting, subscription
+  metadata    Json? // Détails supplémentaires (tokens, messages, etc.)
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model APIUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  date         DateTime @default(now())
+  channel      Channel
+  apiProvider  String // twilio, openai, meta
+  messageCount Int      @default(0)
+  tokenCount   Int      @default(0)
+  costUsd      Float    @default(0)
+  metadata     Json? // Détails supplémentaires
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, date, channel, apiProvider])
+  @@index([tenantId, date])
+  @@index([date])
+}
+
+model Subscription {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @db.Uuid
+  planType          String // starter, business, elite
+  billingCycle      String // monthly, annual
+  status            String    @default("active") // active, expired, cancelled, pending
+  startDate         DateTime
+  endDate           DateTime
+  nextBillingDate   DateTime?
+  priceGnf          Float     @default(0)
+  paymentMethod     String? // mobile_money, bank_transfer, card, cash
+  // Limites du plan
+  conversationLimit Int? // null = illimité
+  pdfLimit          Int? // null = illimité
+  channels          String[] // ["WHATSAPP", "MESSENGER", "FACEBOOK_COMMENT"]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments     Payment[]
+  boosterPacks BoosterPack[]
+  quotaUsages  QuotaUsage[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, endDate])
+}
+
+model Payment {
+  id             String    @id @default(uuid()) @db.Uuid
+  subscriptionId String    @db.Uuid
+  amountGnf      Float
+  method         String // orange_money, mtn_money, bank, card, cash
+  status         String    @default("completed") // pending, completed, failed, refunded
+  transactionId  String?
+  proofUrl       String?
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model TestNumberMapping {
+  id                String   @id @default(uuid()) @db.Uuid
+  senderPhoneNumber String   @unique // Numéro de l'expéditeur (ex: +224626606960)
+  tenantId          String   @db.Uuid
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([senderPhoneNumber])
+  @@index([tenantId])
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  userId    String?   @db.Uuid // null = notification pour tous les users du tenant
+  type      String // "message", "conversation", "rag", "system", "billing", "quota_alert", "quota_exceeded", etc.
+  title     String
+  message   String
+  data      Json? // Données supplémentaires (conversationId, messageId, etc.)
+  read      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, read, createdAt])
+  @@index([userId, read, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+model QuotaUsage {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @db.Uuid
+  subscriptionId     String?   @db.Uuid
+  year               Int // 2024, 2025, etc.
+  month              Int // 1-12
+  conversationsUsed  Int       @default(0)
+  conversationsLimit Int? // null = illimité
+  pdfUploaded        Int       @default(0)
+  pdfLimit           Int? // null = illimité
+  lastAlertSentAt    DateTime? // Pour éviter les spams d'alertes 80%
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId, year, month])
+}
+
+model ConversationSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  conversationId String    @db.Uuid
+  customerHandle String // Pour identifier le client
+  sessionStart   DateTime  @default(now())
+  sessionEnd     DateTime? // null = session active
+  consumed       Boolean   @default(false) // true = cette session a déjà consommé 1 conversation
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerHandle, sessionStart])
+  @@index([conversationId])
+  @@index([tenantId, consumed, sessionStart])
+}
+
+model BoosterPack {
+  id             String    @id @default(uuid()) @db.Uuid
+  subscriptionId String    @db.Uuid
+  packType       String // "pack_100", "pack_400"
+  conversations  Int // 400 conversations additionnelles
+  priceGnf       Float
+  status         String    @default("active") // active, expired, used
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, status])
+}
+
+/// Annonces / publications multi-réseaux rédigées depuis la plateforme
+model SocialPost {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  title     String?
+  body      String
+  /// Liste d'URL d'images éventuellement associées à l'annonce (future extension)
+  mediaUrls String[]
+  /// draft, scheduled, publishing, published, failed
+  status      String    @default("draft")
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  targets SocialPostTarget[]
+
+  @@index([tenantId, createdAt])
+}
+
+/// Cible de publication pour une annonce (Facebook Page, Instagram, etc.)
+model SocialPostTarget {
+  id       String @id @default(uuid()) @db.Uuid
+  postId   String @db.Uuid
+  /// Exemple: "FACEBOOK_PAGE", "INSTAGRAM"
+  network  String
+  /// ID de la ressource créée sur le réseau (post_id Facebook, media_id, etc.)
+  externalId    String?
+  /// pending, publishing, published, failed
+  status        String   @default("pending")
+  errorMessage  String?
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  post SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([network, status])
+}
+
+/// Comptes sociaux connectés par tenant (pour la publication multi-réseaux)
+model SocialAccount {
+  id           String         @id @default(uuid()) @db.Uuid
+  tenantId     String         @db.Uuid
+  platform     SocialPlatform
+  /// Token d'accès chiffré via encryptToken (cryptoService)
+  accessTokenEnc String?
+  /// Identifiant distant: page_id Facebook, business_id Instagram, etc.
+  platformId   String
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, platform])
+  @@index([tenantId, platform])
+}
